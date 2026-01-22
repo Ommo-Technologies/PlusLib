@@ -670,6 +670,20 @@ IF(PLUS_USE_REVOPOINT3DCAMERA)
   SET_TESTS_PROPERTIES(Revopoint3DCameraTest1 PROPERTIES FAIL_REGULAR_EXPRESSION "ERROR")
 ENDIF()
 
+#*************************** Ommo Tracker Test ***************************
+IF(PLUS_USE_OMMO)
+  ADD_EXECUTABLE(vtkPlusOmmoTest vtkPlusOmmoTest.cxx)
+  SET_TARGET_PROPERTIES(vtkPlusOmmoTest PROPERTIES FOLDER Tests)
+  TARGET_LINK_LIBRARIES(vtkPlusOmmoTest vtkPlusDataCollection vtkPlusCommon)
+
+  ADD_TEST(vtkPlusOmmoTest
+    ${PLUS_EXECUTABLE_OUTPUT_PATH}/vtkPlusOmmoTest
+    --config-file=${ConfigFilesDir}/Testing/PlusDeviceSet_DataCollectionOnly_Ommo.xml
+    --verbose=3
+    )
+  SET_TESTS_PROPERTIES(vtkPlusOmmoTest PROPERTIES FAIL_REGULAR_EXPRESSION "ERROR")
+ENDIF()
+
 # --------------------------------------------------------------------------
 # Install
 #

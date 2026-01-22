@@ -38,6 +38,7 @@ writes the buffer to a metafile and displays the live transform in a 3D view.
 #include <vtkXMLUtilities.h>
 #include <vtksys/CommandLineArguments.hxx>
 #include <vtksys/SystemTools.hxx>
+#include "igtlOSUtil.h"  // for igtl::Sleep
 
 class vtkMyCallback : public vtkCommand
 {
@@ -311,6 +312,19 @@ int main(int argc, char** argv)
 
   const double acqStartTime = vtkTimerLog::GetUniversalTime();
 
+  // For tracker devices that add tools dynamically (e.g. Ommo), tools may appear
+  // asynchronously after Start(). Wait up to 10 s for at least one tool.
+  if (!aChannel->GetTrackingEnabled() && aDevice->IsTracker())
+  {
+    const double waitTimeoutSec = 10.0;
+    const double pollIntervalMs = 200.0;
+    const double waitStart = vtkTimerLog::GetUniversalTime();
+    while (!aChannel->GetTrackingEnabled() && (vtkTimerLog::GetUniversalTime() - waitStart) < waitTimeoutSec)
+    {
+      igtl::Sleep(static_cast<int>(pollIntervalMs));
+    }
+  }
+
   if (!aChannel->GetTrackingEnabled())
   {
     LOG_ERROR("Tracking is not enabled!");
@@ -398,7 +412,7 @@ int main(int argc, char** argv)
     iren->SetInteractorStyle(style);
 
     // Must be called after iren and renderer are linked or there will be problems
-    renderer->Render();
+    renWin->Render();
 
     // iren must be initialized so that it can handle events
     iren->Initialize();

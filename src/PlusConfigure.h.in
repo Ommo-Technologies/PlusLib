@@ -119,6 +119,7 @@
 #cmakedefine PLUS_USE_GENERIC_SENSOR_TRACKER
 #cmakedefine PLUS_USE_AZUREKINECT
 #cmakedefine PLUS_USE_REVOPOINT3DCAMERA
+#cmakedefine PLUS_USE_OMMO
 
 #cmakedefine PLUS_USE_VP9
 #cmakedefine PLUS_USE_MKV_IO

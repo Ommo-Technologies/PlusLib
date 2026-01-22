@@ -72,6 +72,7 @@ OPTION(PLUS_USE_PICOSCOPE "Provide support for PicoScope 2xxx series oscilloscop
 OPTION(PLUS_USE_AZUREKINECT "Provide support the Kinect Azure RGB-D camera" OFF)
 OPTION(PLUS_USE_REVOPOINT3DCAMERA "Provide support Revopoint 3D cameras" OFF)
 OPTION(PLUS_USE_GENERIC_SENSOR_TRACKER "Provide support for generic sensor data collection" OFF)
+OPTION(PLUS_USE_OMMO "Provide support for Ommo devices" OFF)
 
 OPTION(PLUS_TEST_ULTRASONIX "Enable testing of acquisition from Ultrasonix ultrasound systems. Enable this only if an Ultrasonix device accessible from this computer." OFF)
 IF(PLUS_TEST_ULTRASONIX)
@@ -2680,6 +2681,36 @@ IF(PLUS_USE_GENERIC_SENSOR_TRACKER)
 ENDIF()
 
 # --------------------------------------------------------------------------
+# Ommo
+IF(PLUS_USE_OMMO)
+  SET(Ommo_DIR CACHE PATH "Path to Ommo SDK")
+  
+  # Use Ommo_DIR directly instead of FIND_PACKAGE
+  # Ommo_DIR points to Ommo-bin, so includes are in ../Ommo/include
+  # Libraries are in Ommo-bin/lib/Debug or lib/Release
+  GET_FILENAME_COMPONENT(_ommo_source_dir "${Ommo_DIR}" DIRECTORY)
+  SET(_ommo_include_dir "${_ommo_source_dir}/Ommo/include")
+  
+  # Use generator expressions for Debug/Release library selection
+  SET(_ommo_library_debug "${Ommo_DIR}/lib/Debug/ommo_sdk.lib")
+  SET(_ommo_library_release "${Ommo_DIR}/lib/Release/ommo_sdk.lib")
+  SET(_ommo_library "$<$<CONFIG:Debug>:${_ommo_library_debug}>$<$<CONFIG:Release>:${_ommo_library_release}>$<$<NOT:$<OR:$<CONFIG:Debug>,$<CONFIG:Release>>>:${_ommo_library_debug}>")
+
+  SET(PlusDataCollection_INCLUDE_DIRS ${PlusDataCollection_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Ommo
+    ${_ommo_include_dir}
+    CACHE INTERNAL "" FORCE)
+
+  SET(PlusDataCollection_LIBS ${PlusDataCollection_LIBS}
+    ${_ommo_library}
+    CACHE INTERNAL "" FORCE)
+
+  SET(PlusDataCollection_SRCS ${PlusDataCollection_SRCS}
+    Ommo/vtkPlusOmmoSource.cxx
+    CACHE INTERNAL "" FORCE)
+ENDIF()
+
+# --------------------------------------------------------------------------
 # Azure Kinect
 IF(PLUS_USE_AZUREKINECT)
   SET(AzureKinect_SRCS
@@ -2789,6 +2820,21 @@ ENDIF()
 
 TARGET_LINK_LIBRARIES(vtk${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}_LIBS})
 TARGET_LINK_LIBRARIES(vtk${PROJECT_NAME} PRIVATE ${${PROJECT_NAME}_PRIVATE_LIBS})
+
+# Copy Ommo DLL to executable directory after library is created
+IF(PLUS_USE_OMMO)
+  # The DLL is located in Ommo_DIR/bin/Debug or bin/Release
+  SET(_ommo_dll_debug "${Ommo_DIR}/bin/Debug/ommo_sdk.dll")
+  SET(_ommo_dll_release "${Ommo_DIR}/bin/Release/ommo_sdk.dll")
+  
+  # Copy DLL to executable directory
+  ADD_CUSTOM_COMMAND(TARGET vtk${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "$<$<CONFIG:Debug>:${_ommo_dll_debug}>$<$<CONFIG:Release>:${_ommo_dll_release}>$<$<NOT:$<OR:$<CONFIG:Debug>,$<CONFIG:Release>>>:${_ommo_dll_debug}>"
+    "$<$<CONFIG:Debug>:${PLUS_EXECUTABLE_OUTPUT_PATH}/Debug>$<$<CONFIG:Release>:${PLUS_EXECUTABLE_OUTPUT_PATH}/Release>$<$<NOT:$<OR:$<CONFIG:Debug>,$<CONFIG:Release>>>:${PLUS_EXECUTABLE_OUTPUT_PATH}/Debug>/ommo_sdk.dll"
+    COMMENT "Copying Ommo SDK DLL to executable directory"
+    )
+ENDIF()
 
 IF(PLUS_USE_BLACKMAGIC_DECKLINK)
   DeckLinkGenerateAPIFiles(vtk${PROJECT_NAME})
