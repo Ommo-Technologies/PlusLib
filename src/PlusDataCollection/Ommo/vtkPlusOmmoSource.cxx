@@ -591,18 +591,22 @@ PlusStatus vtkPlusOmmoSource::InternalUpdate()
         matrix->Element[1][3] = pose.position.y * this->PositionScaleFactor;
         matrix->Element[2][3] = pose.position.z * this->PositionScaleFactor;
         
-        // Get timestamp from latency_timestamps if available (contains epoch milliseconds)
-        // The SDK provides multiple timestamps (sample, service_received, service_sent) in the array.
-        // Index 0 is typically kTimestampTypeSample - when the measurement was taken at the device.
-        // We use index 0 directly for performance rather than searching the array.
-        double timestamp = vtkIGSIOAccurateTimer::GetSystemTime();  // Default fallback
-        
+        // Get timestamp from latency_timestamps if available (contains epoch milliseconds).
+        // If the SDK timestamp is missing or implausible (far from local clock), fall back to
+        // system time to keep Plus buffers time-consistent.
+        double timestamp = vtkIGSIOAccurateTimer::GetSystemTime();
         if (deviceData.latency_timestamps != nullptr && deviceData.latency_timestamp_count > 0)
         {
           uint64_t epochMs = deviceData.latency_timestamps[0].system_timestamp_milliseconds;
           if (epochMs > 0)
           {
-            timestamp = static_cast<double>(epochMs) / 1000.0;  // Convert ms to seconds
+            double sdkTimestampSec = static_cast<double>(epochMs) / 1000.0;
+            double nowSec = vtkIGSIOAccurateTimer::GetSystemTime();
+            constexpr double maxAllowedClockSkewSec = 10.0;
+            if (fabs(sdkTimestampSec - nowSec) <= maxAllowedClockSkewSec)
+            {
+              timestamp = sdkTimestampSec;
+            }
           }
         }
         
@@ -742,6 +746,16 @@ void vtkPlusOmmoSource::HandleDeviceConnect(const ommo::api::DeviceDescriptor& d
                << " - not in RequiredDeviceIds list");
       return;
     }
+  }
+
+  // Ports with no sensor units (e.g. SIUS hub or non-sensing port 0) still appear as connected
+  // devices in the SDK but never produce poses. Do not create tools or map entries — empty
+  // tracker buffers break channels that expect every tool to have timestamps.
+  if (device.sensor_unit_descriptor_count == 0)
+  {
+    LOG_INFO("Skipping port " << device.siu_uuid << ":" << device.port_id
+             << " — no sensor units (non-sensor / hub port)");
+    return;
   }
   
   // Create key from siu_uuid and port_id - each port is tracked separately

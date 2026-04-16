@@ -1,0 +1,112 @@
+///*!
+\page DeviceOmmo Ommo tracking system
+
+Ommo devices provide tracking via an Ommo SIU (Sensor Interface Unit) and a gRPC-based SDK/service.
+Plus connects to the Ommo service, discovers connected devices dynamically, and creates tools in the output channel as ports come online.
+
+\section OmmoSupportedHwDevices Supported hardware devices
+- Ommo basestation
+- Ommo SIU and compatible Ommo IMU sensors
+- Each physical SIU port corresponds to one Ommo "device" in Plus
+- Multi-sensor devices are exposed as separate tools (one per sensor) on the same port
+
+/// Ommo support in Plus
+\section OmmoSupportedPlatforms Supported platforms
+
+- Windows 64-bit (Plus built with Ommo support; Ommo gRPC service reachable)
+- Linux 64-bit (Plus built with Ommo support; Ommo gRPC service reachable)
+
+Note: The Ommo SDK and client libraries are built as part of the Plus superbuild.
+On the Plus side you only need the Ommo gRPC service (`ommo_service`) running and
+reachable at the configured GrpcAddress.
+
+\section OmmoInstallation Installation
+
+- Install the Ommo SDK / runtime and Ommo gRPC service according to vendor instructions.
+- Ensure the Ommo gRPC service is running and reachable on the configured \c GrpcAddress
+  (typically \c "localhost:50051" on the same machine as PlusServer).
+
+\section OmmoCoordinateSystems Coordinate systems
+
+Ommo SDK reports poses in its own tracker coordinate system; Plus exposes them as transforms
+to the \c ToolReferenceFrame (usually \c "Tracker"):
+
+- \c Ommo_<UUID>_P<port>ToTracker:    Single-sensor device on SIU UUID \c <UUID>, port \c <port>
+- \c Ommo_<UUID>_P<port>_S<sensor>ToTracker: Multi-sensor device on SIU UUID \c <UUID>,
+  port \c <port>, sensor index \c <sensor>
+
+Tool names are kept compact so they fit within the 20-character OpenIGTLink transform name limit
+for easy display in 3D Slicer and other clients.
+
+\section OmmoConfigSettings Device configuration settings
+
+- \xmlAtt \ref DeviceType "Type" = \c "Ommo" \RequiredAtt
+- \xmlAtt \ref DeviceAcquisitionRate "AcquisitionRate" \OptionalAtt{100}
+- \xmlAtt \ref ToolReferenceFrame \OptionalAtt{Tracker}
+- \xmlAtt \ref LocalTimeOffsetSec \OptionalAtt{0}
+
+Ommo-specific attributes on the \c Device element:
+
+- \xmlAtt \b GrpcAddress \OptionalAtt{"localhost:50051"}
+  - gRPC address of the Ommo service (e.g. \c "localhost:50051" or \c "192.168.1.10:50051").
+
+- \xmlAtt \b RequiredDeviceIds \OptionalAtt{""}
+  - Comma-separated list of SIU UUIDs (numeric 32-bit IDs) for devices that must be present.
+  - If specified:
+    - Only devices whose \c siu_uuid is in this list are accepted; others are ignored.
+    - Recording will not start until **all** required devices have connected within
+      \c DeviceWaitTimeoutSec.
+
+- \xmlAtt \b DeviceWaitTimeoutSec \OptionalAtt{30.0}
+  - Timeout in seconds to wait for all required devices (from \c RequiredDeviceIds) to connect.
+  - If the timeout is reached and some required devices are still missing, Plus reports an error
+    and does not start recording.
+
+- \xmlAtt \b ConnectionDelaySec \OptionalAtt{2.0}
+  - Used when \c RequiredDeviceIds is **not** specified.
+  - Delay in seconds after the Ommo channel becomes ready before starting device discovery
+    and recording (allows devices to connect after startup).
+
+- \xmlAtt \b BaseStationStartupDelaySec \OptionalAtt{10.0}
+  - Delay in seconds to wait for the SIU/base station motor spin-up before starting acquisition.
+  - Increase this value if the base station needs more time to report stable tracking.
+
+- \xmlAtt \b PositionScaleFactor \OptionalAtt{1.0}
+  - Scale factor applied to Ommo position values so Plus outputs millimeters.
+  - Typical values:
+    - \c 1.0  : Ommo SDK already reports in mm.
+    - \c 10.0 : Ommo SDK reports in cm (cm * 10 = mm).
+    - \c 1000.0 : Ommo SDK reports in meters (m * 1000 = mm).
+
+- \xmlAtt \b BadDataThreshold \OptionalAtt{0.5}
+  - Threshold in \[0.0, 1.0\] for the Ommo \c bad_data_indicator.
+  - If the indicator exceeds this threshold, the tool status is marked as out-of-view.
+  - Increase the threshold to be more tolerant of marginal tracking quality.
+
+Channel configuration:
+
+- \xmlElem \ref OutputChannels One \c OutputChannel used for all Ommo tools. \RequiredAtt
+  - \xmlElem \ref OutputChannel \RequiredAtt
+    - \xmlAtt \ref Id \RequiredAtt
+      - All dynamically created Ommo tools are added to this channel.
+
+\section OmmoDeviceDiscovery Device discovery and tool creation
+
+- Tools are created dynamically when Ommo devices connect to the SIU.
+- Each SIU UUID + port ID pair corresponds to one device in Plus:
+  - Single-sensor: one tool per port.
+  - Multi-sensor: one tool per sensor on the same port.
+- If \c RequiredDeviceIds is specified, only devices whose numeric SIU UUID (\c siu_uuid)
+  appears in that list will be accepted; other devices are ignored.
+
+\section OmmoExampleConfigFile Example configuration files
+
+Example Ommo PlusServer configuration (server + recording):
+
+- \include "ConfigFiles/PlusDeviceSet_Server_Ommo.xml"
+
+Example Ommo data-collection-only configuration:
+
+- \include "ConfigFiles/Testing/PlusDeviceSet_DataCollectionOnly_Ommo.xml"
+
+*/
