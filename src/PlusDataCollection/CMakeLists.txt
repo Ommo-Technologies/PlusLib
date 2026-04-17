@@ -1382,6 +1382,11 @@ IF(PLUS_USE_BKPROFOCUS_VIDEO)
     ${CMAKE_CURRENT_BINARY_DIR}/vtkPNGPrivate.h
     )
 
+  # BK OEM decoder directly calls VTK's wrapped libpng API (vtkpng_* symbols).
+  LIST(APPEND ${PROJECT_NAME}_LIBS
+    ${PLUSLIB_VTK_PREFIX}png
+    )
+
   # CameraLink interface
   IF(PLUS_USE_BKPROFOCUS_CAMERALINK)
     LIST(APPEND ${PROJECT_NAME}_INCLUDE_DIRS

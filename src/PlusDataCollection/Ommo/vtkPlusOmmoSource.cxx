@@ -398,7 +398,77 @@ PlusStatus vtkPlusOmmoSource::InternalStartRecording()
     [this](const ommo::api::TrackingDeviceData& data) { this->TrackingDeviceDataHandler(data); });
 
   this->IsConnected = true;
+  this->WaitForFirstToolSamplesAfterDataRequest();
   return PLUS_SUCCESS;
+}
+
+//----------------------------------------------------------------------------
+void vtkPlusOmmoSource::WaitForFirstToolSamplesAfterDataRequest()
+{
+  constexpr double kMaxWaitSec = 15.0;
+  constexpr int kPollIntervalMs = 20;
+
+  bool needWait = false;
+  {
+    std::lock_guard<std::mutex> lock(this->DeviceToolMapMutex);
+    for (const auto& pair : this->DeviceToolMap)
+    {
+      if (!pair.second.tools.empty())
+      {
+        needWait = true;
+        break;
+      }
+    }
+  }
+  if (!needWait)
+  {
+    LOG_WARNING("Ommo: No tracker tools registered; skipping wait for first sample.");
+    return;
+  }
+
+  double waitedSec = 0.0;
+  while (waitedSec < kMaxWaitSec)
+  {
+    this->InternalUpdate();
+
+    bool allHaveSample = true;
+    {
+      std::lock_guard<std::mutex> lock(this->DeviceToolMapMutex);
+      for (const auto& pair : this->DeviceToolMap)
+      {
+        for (vtkPlusDataSource* tool : pair.second.tools)
+        {
+          if (tool == nullptr)
+          {
+            continue;
+          }
+          double ts = 0.0;
+          if (tool->GetLatestTimeStamp(ts) != ITEM_OK)
+          {
+            allHaveSample = false;
+            break;
+          }
+        }
+        if (!allHaveSample)
+        {
+          break;
+        }
+      }
+    }
+
+    if (allHaveSample)
+    {
+      LOG_INFO("Ommo: First tracking samples received for all connected tools.");
+      return;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(kPollIntervalMs));
+    waitedSec += kPollIntervalMs / 1000.0;
+  }
+
+  LOG_WARNING("Ommo: No tracking samples within " << kMaxWaitSec
+              << "s after starting data request (tool out of range or stream delay). "
+              << "Downstream devices may log errors until data arrives.");
 }
 
 //----------------------------------------------------------------------------
@@ -754,7 +824,7 @@ void vtkPlusOmmoSource::HandleDeviceConnect(const ommo::api::DeviceDescriptor& d
   if (device.sensor_unit_descriptor_count == 0)
   {
     LOG_INFO("Skipping port " << device.siu_uuid << ":" << device.port_id
-             << " — no sensor units (non-sensor / hub port)");
+             << " - no sensor units (non-sensor / hub port)");
     return;
   }
   

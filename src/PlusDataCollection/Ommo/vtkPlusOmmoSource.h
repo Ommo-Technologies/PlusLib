@@ -62,7 +62,9 @@ private:
   
   void HandleDeviceConnect(const ommo::api::DeviceDescriptor& device);
   void HandleDeviceDisconnect(const ommo::api::DeviceDescriptor& device);
-  
+
+  /*! Poll tracking until each connected tool has at least one buffer sample (or timeout). Avoids empty-channel errors at startup. */
+  void WaitForFirstToolSamplesAfterDataRequest();
 
   std::string GrpcAddress;
   std::vector<uint32_t> RequiredDeviceUuids;  // Parsed UUIDs from RequiredDeviceIds config (validated in ReadConfiguration)
